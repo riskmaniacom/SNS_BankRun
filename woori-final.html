@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>통합 뱅크런(평판) 모니터링 시스템</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:#F1F5F9;color:#1A202C;font-family:'Noto Sans KR',sans-serif;min-height:100vh}
+    ::-webkit-scrollbar{width:5px}
+    ::-webkit-scrollbar-thumb{background:#CBD5E0;border-radius:3px}
+    @keyframes blink {0%,100%{opacity:1}50%{opacity:.3}}
+    @keyframes stripe{from{background-position:0 0}to{background-position:32px 0}}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+    mark{background:#FEE2E2;color:#DC2626;border-radius:3px;padding:0 3px}
+
+    /* ── Nav ── */
+    .topnav{background:#fff;border-bottom:1px solid #E2E8F0;padding:0 20px;display:flex;align-items:center;position:sticky;top:0;z-index:100;box-shadow:0 1px 4px rgba(0,0,0,0.07)}
+    .logo-mark{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#0046B5,#1D6EF5);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:#fff;flex-shrink:0}
+    .nav-tab{background:none;border:none;cursor:pointer;padding:15px 14px;font-size:13px;font-family:'Noto Sans KR',sans-serif;border-bottom:2px solid transparent;color:#64748B;font-weight:500;transition:all .2s}
+    .nav-tab.active{color:#0046B5;border-bottom-color:#0046B5;font-weight:700}
+    .live-dot{width:6px;height:6px;border-radius:50%;background:#22C55E;animation:blink 1.5s ease infinite}
+    .search-box{background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:6px 12px;font-size:12px;color:#475569;font-family:'Noto Sans KR',sans-serif;width:140px}
+    .search-box:focus{outline:none;border-color:#0046B5}
+
+    /* ── Layout ── */
+    .wrap{max-width:1100px;margin:0 auto;padding:18px 16px}
+
+    /* ── IBRI Master Panel ── */
+    .ibri-master{background:#fff;border-radius:18px;border:1.5px solid #EF4444;box-shadow:0 4px 24px rgba(239,68,68,0.13);margin-bottom:16px;overflow:hidden}
+    .ibri-stripe{height:4px;background:repeating-linear-gradient(45deg,rgba(239,68,68,0.35),rgba(239,68,68,0.35) 8px,transparent 8px,transparent 16px);animation:stripe 2s linear infinite}
+    .ibri-top{padding:16px 20px 14px;border-bottom:1px solid #FEE2E2;display:flex;align-items:center;justify-content:space-between;gap:16px}
+    .ibri-body{padding:18px 20px}
+
+    /* ── Score Circle ── */
+    .score-wrap{display:flex;align-items:center;gap:14px;flex-shrink:0}
+
+    /* ── Two-column grid ── */
+    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+
+    /* ── Signal column ── */
+    .sig-col{border-radius:14px;padding:14px 16px;border:1px solid}
+    .sig-col.external{background:#FFF5F5;border-color:#FECACA}
+    .sig-col.internal{background:#EFF6FF;border-color:#BFDBFE}
+    .col-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+    .col-title{font-size:12px;font-weight:800;display:flex;align-items:center;gap:5px}
+    .col-score{font-size:20px;font-weight:900;line-height:1}
+
+    /* ── Axis bars ── */
+    .ax-row{margin-bottom:9px}
+    .ax-lbl{display:flex;justify-content:space-between;margin-bottom:3px}
+    .ax-track{height:6px;background:#E2E8F0;border-radius:3px;overflow:hidden}
+    .ax-fill{height:100%;border-radius:3px;transition:width .9s ease}
+
+    /* ── Internal metric grid ── */
+    .m-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:10px}
+    .m-card{border-radius:10px;padding:9px 11px;border:1px solid}
+    .m-val{font-size:17px;font-weight:900;line-height:1;margin:3px 0}
+    .m-label{font-size:10px;color:#64748B;font-weight:500}
+    .m-change{font-size:10px;font-weight:700;margin-top:2px}
+
+    /* ── Timeline ── */
+    .tl-wrap{background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;padding:11px 12px;margin-top:10px}
+    .tl-bars{display:flex;align-items:flex-end;gap:3px;height:44px;margin-top:6px}
+    .tl-bar{flex:1;border-radius:2px 2px 0 0;cursor:pointer;position:relative;min-height:3px}
+    .tl-bar:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100%+3px);left:50%;transform:translateX(-50%);background:#1A202C;color:#fff;font-size:9px;padding:2px 6px;border-radius:4px;white-space:nowrap;z-index:10;pointer-events:none}
+    .tl-label-row{display:flex;gap:3px;margin-top:3px}
+    .tl-lbl{flex:1;font-size:8px;color:#94A3B8;text-align:center}
+
+    /* ── Combined score bar ── */
+    .combined-bar{background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:14px 16px;margin-bottom:14px}
+    .c-bar-track{display:flex;height:24px;border-radius:8px;overflow:hidden;gap:2px;margin:10px 0}
+    .c-bar-seg{display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff}
+
+    /* ── Alert row ── */
+    .alert-row{background:#FFF5F5;border:1px solid #FECACA;border-radius:11px;padding:11px 14px;margin-bottom:14px;display:flex;align-items:center;gap:12px}
+
+    /* ── Keyword chips ── */
+    .chip{display:inline-flex;align-items:center;font-size:10px;font-weight:700;padding:3px 9px;border-radius:6px;margin:2px}
+
+    /* ── KPI row ── */
+    .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+    .kpi{background:#fff;border-radius:12px;padding:13px 15px;border:1px solid #E2E8F0;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+
+    /* ── Risk summary ── */
+    .risk-2col{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+    .risk-card{background:#fff;border-radius:14px;padding:15px 17px;border:1px solid #E2E8F0;box-shadow:0 1px 4px rgba(0,0,0,0.04)}
+
+    /* ── Filter ── */
+    .filter-bar{display:flex;gap:5px;margin-bottom:11px;overflow-x:auto;padding-bottom:2px;align-items:center}
+    .f-btn{background:#fff;border:1px solid #E2E8F0;color:#64748B;border-radius:20px;padding:5px 12px;font-size:11px;cursor:pointer;white-space:nowrap;flex-shrink:0;font-family:'Noto Sans KR',sans-serif;font-weight:500;transition:all .15s;display:flex;align-items:center;gap:3px}
+    .f-btn:hover{border-color:#0046B5;color:#0046B5}
+    .f-btn.active{background:#EFF6FF;border-color:#BFDBFE;color:#0046B5;font-weight:700}
+    .f-btn.bkw.active{background:#FEF2F2;border-color:#FECACA;color:#DC2626}
+
+    /* ── Post Cards ── */
+    .post-card{background:#fff;border:1px solid #E2E8F0;border-radius:14px;overflow:hidden;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.04);transition:box-shadow .2s;animation:fadeIn .35s ease}
+    .post-card:hover{box-shadow:0 4px 14px rgba(0,0,0,0.09)}
+    .rrs-bar{height:3px}
+    .post-inner{padding:13px 15px}
+    .pill{display:inline-flex;align-items:center;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px}
+    .bars-box{background:#F8FAFC;border-radius:9px;padding:10px 12px;border:1px solid #E2E8F0;margin-bottom:7px}
+    .b-row{margin-bottom:6px}
+    .b-lbl{display:flex;justify-content:space-between;margin-bottom:2px}
+    .b-track{height:5px;background:#E2E8F0;border-radius:2px;overflow:hidden}
+    .b-fill{height:100%;border-radius:2px;transition:width .9s ease}
+    .bri-box{border-radius:9px;padding:9px 12px;margin-bottom:7px}
+    .summary-txt{font-size:12px;color:#64748B;line-height:1.7;background:#F8FAFC;padding:8px 10px;border-radius:8px;border:1px solid #E2E8F0;margin-bottom:5px}
+    .kw-tag{background:#EFF6FF;color:#3B82F6;font-size:10px;padding:2px 7px;border-radius:6px;font-weight:500}
+
+    /* ── Forms ── */
+    .form-label{font-size:11px;color:#64748B;display:block;margin-bottom:4px;font-weight:600}
+    .form-input{width:100%;background:#F8FAFC;border:1.5px solid #E2E8F0;border-radius:9px;padding:9px 12px;color:#1A202C;font-size:13px;font-family:'Noto Sans KR',sans-serif;transition:border .15s}
+    .form-input:focus{outline:none;border-color:#0046B5;background:#fff}
+    .form-textarea{width:100%;background:#F8FAFC;border:1.5px solid #E2E8F0;border-radius:9px;padding:11px 13px;color:#1A202C;font-size:13px;resize:vertical;line-height:1.65;font-family:'Noto Sans KR',sans-serif;transition:border .15s}
+    .form-textarea:focus{outline:none;border-color:#0046B5;background:#fff}
+    .submit-btn{width:100%;background:linear-gradient(135deg,#0046B5,#1D6EF5);color:#fff;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:800;cursor:pointer;font-family:'Noto Sans KR',sans-serif;box-shadow:0 4px 12px rgba(0,70,181,0.25);transition:all .2s}
+    .submit-btn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(0,70,181,0.35)}
+    .submit-btn:disabled{background:#CBD5E0;box-shadow:none;cursor:not-allowed;transform:none}
+    .demo-banner{background:#FFFBEB;border:1px solid #FDE68A;border-radius:9px;padding:8px 12px;margin-bottom:12px;font-size:11px;color:#92400E}
+    .api-panel{background:#EFF6FF;border:1px solid #BFDBFE;border-radius:11px;padding:13px 15px;margin-bottom:13px}
+    .api-input{background:#fff;border:1.5px solid #BFDBFE;border-radius:8px;padding:8px 11px;color:#1A202C;font-size:12px;font-family:monospace;flex:1}
+    .api-input:focus{outline:none;border-color:#0046B5}
+    .api-btn{background:#0046B5;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif}
+    .bkw-alert{display:none;margin-top:7px;background:#FEF2F2;border:1px solid #FECACA;border-radius:7px;padding:6px 10px;font-size:11px;color:#DC2626}
+    .divider{height:1px;background:#F1F5F9;margin:8px 0}
+  </style>
+</head>
+<body>
+
+<!-- TOP NAV -->
+<div class="topnav">
+  <div style="display:flex;align-items:center;gap:9px;padding:12px 0;border-right:1px solid #E2E8F0;padding-right:18px;margin-right:4px">
+    <div class="logo-mark">우</div>
+    <div>
+      <div style="font-size:13px;font-weight:800;color:#1A202C;letter-spacing:-.02em">통합 뱅크런(평판) 모니터링 시스템</div>
+      <div style="font-size:9px;color:#94A3B8;margin-top:1px">Integrated BankRun & Reputation Monitoring System</div>
+    </div>
+  </div>
+  <div style="display:flex;flex:1;padding:0 4px">
+    <button class="nav-tab active" onclick="switchTab('feed',this)">📡 실시간 피드</button>
+    <button class="nav-tab" onclick="switchTab('add',this)">✏️ 게시글 입력</button>
+  </div>
+  <div style="display:flex;align-items:center;gap:7px;margin-left:auto">
+    <div style="display:flex;align-items:center;gap:4px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:20px;padding:4px 10px">
+      <div class="live-dot"></div>
+      <span style="font-size:10px;color:#16A34A;font-weight:600">LIVE</span>
+    </div>
+    <div style="font-size:10px;color:#94A3B8;background:#F8FAFC;border:1px solid #E2E8F0;padding:4px 10px;border-radius:20px">기준 2026.04.19 14:30</div>
+    <input class="search-box" id="searchInput" placeholder="🔍 게시글 검색..." oninput="renderPosts()"/>
+  </div>
+</div>
+
+<!-- FEED TAB -->
+<div id="tab-feed">
+<div class="wrap">
+
+  <!-- ══════════════════════════════════════════
+       통합 뱅크런 위험지수 (I-BRI) 마스터 패널
+  ══════════════════════════════════════════ -->
+  <div class="ibri-master">
+    <div class="ibri-stripe"></div>
+
+    <!-- 헤더: 종합 점수 + 경보 -->
+    <div class="ibri-top">
+      <!-- 타이틀 -->
+      <div style="flex:1">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+          <span style="font-size:15px;font-weight:900;color:#DC2626">🚨 통합 뱅크런 위험지수 (I-BRI)</span>
+          <span style="background:#DC2626;color:#fff;font-size:10px;font-weight:800;padding:2px 10px;border-radius:20px">HIGH ALERT</span>
+        </div>
+        <div style="font-size:11px;color:#94A3B8;margin-bottom:10px">외부 SNS·뉴스 신호 (50%) + 내부 고객행동 데이터 (50%) 통합 산출</div>
+        <!-- Alert -->
+        <div style="background:#FFF5F5;border:1px solid #FECACA;border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:10px">
+          <div style="flex-shrink:0;text-align:center">
+            <div style="font-size:9px;color:#DC2626;font-weight:600">경보단계</div>
+            <div style="font-size:15px;font-weight:900;color:#DC2626">고위험 경보</div>
+          </div>
+          <div style="width:1px;height:32px;background:#FECACA;flex-shrink:0"></div>
+          <div style="font-size:11.5px;color:#64748B;line-height:1.6">
+            <span style="color:#DC2626;font-weight:700">⚡ 권장 대응 </span>위기대응팀 즉시 소집 · 유동성 긴급 점검 · SNS 24시간 모니터링 강화 · 경영진 보고
+          </div>
+        </div>
+      </div>
+      <!-- 종합 스코어 -->
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0">
+        <svg width="100" height="100" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="42" fill="none" stroke="#F1F5F9" stroke-width="9"/>
+          <!-- 배경 컬러 아크 -->
+          <circle cx="50" cy="50" r="42" fill="none" stroke="#BBF7D0" stroke-width="9" stroke-dasharray="53 211" stroke-dashoffset="53" transform="rotate(-90 50 50)"/>
+          <circle cx="50" cy="50" r="42" fill="none" stroke="#FDE68A" stroke-width="9" stroke-dasharray="42 211" stroke-dashoffset="0" transform="rotate(-90 50 50)"/>
+          <circle cx="50" cy="50" r="42" fill="none" stroke="#FCA5A5" stroke-width="9" stroke-dasharray="53 211" stroke-dashoffset="-42" transform="rotate(-90 50 50)"/>
+          <circle cx="50" cy="50" r="42" fill="none" stroke="#EF4444" stroke-width="9" stroke-dasharray="63 211" stroke-dashoffset="-95" transform="rotate(-90 50 50)"/>
+          <!-- 실제 점수 아크 (76점) -->
+          <circle cx="50" cy="50" r="42" fill="none" stroke="#DC2626" stroke-width="9"
+            stroke-dasharray="160 211" stroke-dashoffset="53"
+            stroke-linecap="round" transform="rotate(-90 50 50)"
+            style="filter:drop-shadow(0 0 5px rgba(220,38,38,0.5))"/>
+          <text x="50" y="44" text-anchor="middle" fill="#DC2626" font-size="24" font-weight="900">76</text>
+          <text x="50" y="56" text-anchor="middle" fill="#94A3B8" font-size="9">/ 100점</text>
+          <text x="50" y="67" text-anchor="middle" fill="#EF4444" font-size="9" font-weight="700">고위험</text>
+        </svg>
+        <!-- 구성 비율 표시 -->
+        <div style="display:flex;gap:6px">
+          <div style="text-align:center;background:#FEF2F2;border:1px solid #FECACA;border-radius:7px;padding:4px 8px">
+            <div style="font-size:9px;color:#94A3B8">SNS신호</div>
+            <div style="font-size:14px;font-weight:900;color:#EF4444">42점</div>
+          </div>
+          <div style="display:flex;align-items:center;color:#94A3B8;font-size:12px">+</div>
+          <div style="text-align:center;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:7px;padding:4px 8px">
+            <div style="font-size:9px;color:#94A3B8">내부행동</div>
+            <div style="font-size:14px;font-weight:900;color:#1D4ED8">87점</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 본문: 좌(외부) / 우(내부) 나란히 ── -->
+    <div class="ibri-body">
+
+      <!-- 종합 점수 구성 바 -->
+      <div class="combined-bar">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-size:11px;font-weight:700;color:#374151">📊 I-BRI 점수 구성 (외부 50% + 내부 50%)</span>
+          <span style="font-size:10px;color:#94A3B8">= 21점 + 43.5점 + 조정(+11.5) = <strong style="color:#DC2626">76점</strong></span>
+        </div>
+        <div class="c-bar-track">
+          <div class="c-bar-seg" style="flex:2.1;background:#FCA5A5">SNS신호 42점 × 50% = 21</div>
+          <div class="c-bar-seg" style="flex:4.35;background:#EF4444">내부행동 87점 × 50% = 43.5</div>
+          <div class="c-bar-seg" style="flex:1.15;background:#DC2626;border-radius:0 6px 6px 0">+11.5</div>
+        </div>
+        <!-- 경보 척도 -->
+        <div style="display:flex;gap:2px;margin-top:6px">
+          <div style="flex:2;background:#D1FAE5;height:16px;border-radius:3px 0 0 3px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;color:#065F46">정상 0~20</div>
+          <div style="flex:2;background:#FEF9C3;height:16px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;color:#713F12">관찰 21~40</div>
+          <div style="flex:2;background:#FED7AA;height:16px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;color:#7C2D12">주의 41~60</div>
+          <div style="flex:2;background:#FCA5A5;height:16px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;position:relative">
+            고위험 61~80
+            <div style="position:absolute;top:-14px;left:50%;transform:translateX(-50%);font-size:9px;color:#DC2626;font-weight:800;white-space:nowrap">▼ 현재 76</div>
+          </div>
+          <div style="flex:1;background:#EF4444;height:16px;border-radius:0 3px 3px 0;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff">임박 81+</div>
+        </div>
+      </div>
+
+      <!-- ── 2컬럼: 외부(좌) + 내부(우) ── -->
+      <div class="two-col">
+
+        <!-- 왼쪽: 외부 SNS 신호 -->
+        <div class="sig-col external">
+          <div class="col-head">
+            <div class="col-title" style="color:#DC2626">📡 외부 SNS·뉴스 신호<span style="font-size:9px;color:#94A3B8;font-weight:500">가중치 50%</span></div>
+            <div class="col-score" style="color:#EF4444">42점</div>
+          </div>
+
+          <!-- 4개 축 -->
+          <div class="ax-row">
+            <div class="ax-lbl"><span style="font-size:11px;color:#64748B">😰 불신·공포 감성</span><span style="font-size:11px;color:#EF4444;font-weight:700">82점</span></div>
+            <div class="ax-track"><div class="ax-fill" style="width:82%;background:#EF4444"></div></div>
+            <div style="font-size:10px;color:#94A3B8;margin-top:2px">감지: 뱅크런, 파산, SVB, 리먼, 불안</div>
+          </div>
+          <div class="ax-row">
+            <div class="ax-lbl"><span style="font-size:11px;color:#64748B">💸 인출 의도 신호</span><span style="font-size:11px;color:#F97316;font-weight:700">85점</span></div>
+            <div class="ax-track"><div class="ax-fill" style="width:85%;background:#F97316"></div></div>
+            <div style="font-size:10px;color:#94A3B8;margin-top:2px">감지: 현금인출, 예금 옮겨, 계좌해지</div>
+          </div>
+          <div class="ax-row">
+            <div class="ax-lbl"><span style="font-size:11px;color:#64748B">📢 SNS 확산 속도</span><span style="font-size:11px;color:#EAB308;font-weight:700">88점</span></div>
+            <div class="ax-track"><div class="ax-fill" style="width:88%;background:#EAB308"></div></div>
+            <div style="font-size:10px;color:#94A3B8;margin-top:2px">커뮤니티 언급 1만건+ / 24h</div>
+          </div>
+          <div class="ax-row" style="margin-bottom:10px">
+            <div class="ax-lbl"><span style="font-size:11px;color:#64748B">📰 미디어 증폭도</span><span style="font-size:11px;color:#A855F7;font-weight:700">75점</span></div>
+            <div class="ax-track"><div class="ax-fill" style="width:75%;background:#A855F7"></div></div>
+            <div style="font-size:10px;color:#94A3B8;margin-top:2px">주요 언론사 직접 보도 확산</div>
+          </div>
+
+          <div class="divider"></div>
+
+          <!-- 뱅크런 키워드 -->
+          <div style="font-size:10px;font-weight:700;color:#DC2626;margin-bottom:6px">🔍 탐지 키워드 (게시글 6건)</div>
+          <div style="display:flex;flex-wrap:wrap;gap:3px">
+            <span class="chip" style="background:#FEE2E2;color:#DC2626">⚠ 뱅크런</span>
+            <span class="chip" style="background:#FEE2E2;color:#DC2626">⚠ 파산</span>
+            <span class="chip" style="background:#FEE2E2;color:#DC2626">⚠ 현금인출</span>
+            <span class="chip" style="background:#FEE2E2;color:#DC2626">⚠ SVB</span>
+            <span class="chip" style="background:#FEE2E2;color:#DC2626">⚠ 예금 옮겨</span>
+            <span class="chip" style="background:#FEE2E2;color:#DC2626">⚠ 계좌해지</span>
+            <span class="chip" style="background:#FEE2E2;color:#DC2626">⚠ 망한다</span>
+            <span class="chip" style="background:#FEE2E2;color:#DC2626">⚠ 리먼</span>
+            <span class="chip" style="background:#FEE2E2;color:#DC2626">⚠ 불신</span>
+          </div>
+
+          <!-- SNS 게시글 위험 건수 -->
+          <div class="divider"></div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">
+            <div style="text-align:center;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:7px 4px">
+              <div style="font-size:16px;font-weight:900;color:#DC2626">6건</div>
+              <div style="font-size:9px;color:#94A3B8;margin-top:1px">뱅크런 직접 언급</div>
+            </div>
+            <div style="text-align:center;background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;padding:7px 4px">
+              <div style="font-size:16px;font-weight:900;color:#EA580C">4건</div>
+              <div style="font-size:9px;color:#94A3B8;margin-top:1px">E·D등급 게시글</div>
+            </div>
+            <div style="text-align:center;background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;padding:7px 4px">
+              <div style="font-size:16px;font-weight:900;color:#EA580C">8,630</div>
+              <div style="font-size:9px;color:#94A3B8;margin-top:1px">총 반응 (좋아요+댓글)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 오른쪽: 내부 고객행동 -->
+        <div class="sig-col internal">
+          <div class="col-head">
+            <div class="col-title" style="color:#1D4ED8">🏦 내부 고객행동 데이터<span style="font-size:9px;color:#94A3B8;font-weight:500">가중치 50%</span></div>
+            <div class="col-score" style="color:#DC2626">87점</div>
+          </div>
+
+          <!-- 4개 내부 BRI 축 -->
+          <div class="ax-row">
+            <div class="ax-lbl"><span style="font-size:11px;color:#64748B">💰 예수금 이탈 위험도</span><span style="font-size:11px;color:#EF4444;font-weight:700">88점</span></div>
+            <div class="ax-track"><div class="ax-fill" style="width:88%;background:#EF4444"></div></div>
+          </div>
+          <div class="ax-row">
+            <div class="ax-lbl"><span style="font-size:11px;color:#64748B">📱 모바일·ATM 이상거래</span><span style="font-size:11px;color:#F97316;font-weight:700">92점</span></div>
+            <div class="ax-track"><div class="ax-fill" style="width:92%;background:#F97316"></div></div>
+          </div>
+          <div class="ax-row">
+            <div class="ax-lbl"><span style="font-size:11px;color:#64748B">🔐 계좌해지·해지 급증</span><span style="font-size:11px;color:#EAB308;font-weight:700">85점</span></div>
+            <div class="ax-track"><div class="ax-fill" style="width:85%;background:#EAB308"></div></div>
+          </div>
+          <div class="ax-row" style="margin-bottom:10px">
+            <div class="ax-lbl"><span style="font-size:11px;color:#64748B">📞 고객 문의·민원 급증</span><span style="font-size:11px;color:#A855F7;font-weight:700">80점</span></div>
+            <div class="ax-track"><div class="ax-fill" style="width:80%;background:#A855F7"></div></div>
+          </div>
+
+          <div class="divider"></div>
+
+          <!-- 내부 지표 9개 카드 -->
+          <div class="m-grid">
+            <div class="m-card" style="background:#FFF5F5;border-color:#FECACA">
+              <div class="m-label">💰 예수금 이탈률</div>
+              <div class="m-val" style="color:#DC2626">-4.7%</div>
+              <div class="m-change" style="color:#DC2626">▲ 전일比 +2.3%p 악화</div>
+            </div>
+            <div class="m-card" style="background:#FFF5F5;border-color:#FECACA">
+              <div class="m-label">📉 예수금 이탈 규모</div>
+              <div class="m-val" style="color:#DC2626">2.3조</div>
+              <div class="m-change" style="color:#DC2626">▲ 전일比 +8,200억원</div>
+            </div>
+            <div class="m-card" style="background:#FFF7ED;border-color:#FED7AA">
+              <div class="m-label">📱 모바일 이체 시도</div>
+              <div class="m-val" style="color:#EA580C">+312%</div>
+              <div class="m-change" style="color:#EA580C">▲ 전일 동시간 대비</div>
+            </div>
+            <div class="m-card" style="background:#FFF7ED;border-color:#FED7AA">
+              <div class="m-label">🏧 ATM 현금인출</div>
+              <div class="m-val" style="color:#EA580C">+187%</div>
+              <div class="m-change" style="color:#EA580C">▲ 한도 집중 인출</div>
+            </div>
+            <div class="m-card" style="background:#FFFBEB;border-color:#FDE68A">
+              <div class="m-label">🔐 계좌 해지 신청</div>
+              <div class="m-val" style="color:#D97706">847건</div>
+              <div class="m-change" style="color:#D97706">▲ 전일比 +634%</div>
+            </div>
+            <div class="m-card" style="background:#FFFBEB;border-color:#FDE68A">
+              <div class="m-label">💳 타행 이체 급증</div>
+              <div class="m-val" style="color:#D97706">+241%</div>
+              <div class="m-change" style="color:#D97706">▲ KB·신한·하나 방향</div>
+            </div>
+            <div class="m-card" style="background:#EFF6FF;border-color:#BFDBFE">
+              <div class="m-label">🌐 인터넷뱅킹 접속</div>
+              <div class="m-val" style="color:#1D4ED8">+189%</div>
+              <div class="m-change" style="color:#DC2626">▲ 잔액 조회 집중</div>
+            </div>
+            <div class="m-card" style="background:#FAF5FF;border-color:#E9D5FF">
+              <div class="m-label">📞 고객센터 문의</div>
+              <div class="m-val" style="color:#7C3AED">4,231건</div>
+              <div class="m-change" style="color:#DC2626">▲ "예금 안전?" 집중</div>
+            </div>
+          </div>
+
+          <!-- 시간대별 추이 -->
+          <div class="tl-wrap">
+            <div style="font-size:10px;font-weight:700;color:#374151">📈 시간대별 예수금 이탈 추이 (억원)</div>
+            <div class="tl-bars" id="tlBars"></div>
+            <div class="tl-label-row" id="tlLabels"></div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /ibri-body -->
+  </div><!-- /ibri-master -->
+
+  <!-- ══ KPI + Grade ══ -->
+  <div class="risk-2col">
+    <div class="risk-card">
+      <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:10px">📊 RRS 등급 현황 (10건 분석)</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <svg width="80" height="52" viewBox="0 0 80 52">
+          <path d="M 8 46 A 34 34 0 0 1 72 46" fill="none" stroke="#E2E8F0" stroke-width="7" stroke-linecap="round"/>
+          <path d="M 8 46 A 34 34 0 1 1 66 24" fill="none" stroke="#F97316" stroke-width="7" stroke-linecap="round"/>
+          <line x1="40" y1="46" x2="64" y2="25" stroke="#F97316" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="40" cy="46" r="3.5" fill="#F97316"/>
+          <text x="40" y="37" text-anchor="middle" fill="#F97316" font-size="14" font-weight="900">71</text>
+          <text x="40" y="46" text-anchor="middle" fill="#94A3B8" font-size="6">/100</text>
+        </svg>
+        <div>
+          <div style="font-size:10px;color:#94A3B8">평균 RRS</div>
+          <div style="font-size:20px;font-weight:900;color:#F97316;line-height:1">D등급 · 71점</div>
+          <div style="font-size:10px;color:#F97316;margin-top:2px">고위험 — PR팀 즉시 대응</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:5px">
+        <div style="flex:1;background:#FEF2F2;border:1px solid #FECACA;border-radius:7px;padding:6px 3px;text-align:center"><div style="font-size:14px;font-weight:900;color:#EF4444">2</div><div style="font-size:9px;color:#94A3B8">E</div></div>
+        <div style="flex:1;background:#FFF7ED;border:1px solid #FED7AA;border-radius:7px;padding:6px 3px;text-align:center"><div style="font-size:14px;font-weight:900;color:#F97316">2</div><div style="font-size:9px;color:#94A3B8">D</div></div>
+        <div style="flex:1;background:#FFFBEB;border:1px solid #FDE68A;border-radius:7px;padding:6px 3px;text-align:center"><div style="font-size:14px;font-weight:900;color:#EAB308">2</div><div style="font-size:9px;color:#94A3B8">C</div></div>
+        <div style="flex:1;background:#FEFCE8;border:1px solid #FEF08A;border-radius:7px;padding:6px 3px;text-align:center"><div style="font-size:14px;font-weight:900;color:#CA8A04">1</div><div style="font-size:9px;color:#94A3B8">B</div></div>
+        <div style="flex:1;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:7px;padding:6px 3px;text-align:center"><div style="font-size:14px;font-weight:900;color:#16A34A">2</div><div style="font-size:9px;color:#94A3B8">A</div></div>
+        <div style="flex:1;background:#ECFEFF;border:1px solid #A5F3FC;border-radius:7px;padding:6px 3px;text-align:center"><div style="font-size:14px;font-weight:900;color:#0891B2">1</div><div style="font-size:9px;color:#94A3B8">S</div></div>
+      </div>
+    </div>
+    <div class="risk-card" style="border-color:#FECACA;background:linear-gradient(135deg,#FFF5F5,#fff)">
+      <div style="font-size:12px;font-weight:700;color:#DC2626;margin-bottom:10px">🚨 핵심 위험 지표 요약</div>
+      <div style="display:flex;flex-direction:column;gap:7px">
+        <div style="display:flex;justify-content:space-between;align-items:center;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:7px 11px">
+          <span style="font-size:11px;color:#64748B">통합 I-BRI 점수</span>
+          <span style="font-size:16px;font-weight:900;color:#DC2626">76점 <span style="font-size:10px;color:#EF4444">고위험</span></span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;padding:7px 11px">
+          <span style="font-size:11px;color:#64748B">예수금 이탈액</span>
+          <span style="font-size:16px;font-weight:900;color:#EA580C">2.3조원</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;padding:7px 11px">
+          <span style="font-size:11px;color:#64748B">모바일 이체 급증</span>
+          <span style="font-size:16px;font-weight:900;color:#EA580C">+312%</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;padding:7px 11px">
+          <span style="font-size:11px;color:#64748B">계좌해지 신청</span>
+          <span style="font-size:16px;font-weight:900;color:#D97706">847건</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPI -->
+  <div class="kpi-row">
+    <div class="kpi" style="border-color:#FECACA">
+      <div style="font-size:10px;color:#94A3B8">🚨 뱅크런 신호</div>
+      <div style="font-size:22px;font-weight:900;color:#DC2626;line-height:1;margin-top:4px">6건</div>
+      <div style="font-size:10px;color:#CBD5E0;margin-top:2px">SNS 직접 언급</div>
+    </div>
+    <div class="kpi" style="border-color:#FED7AA">
+      <div style="font-size:10px;color:#94A3B8">🔴 E·D등급</div>
+      <div style="font-size:22px;font-weight:900;color:#EA580C;line-height:1;margin-top:4px">4건</div>
+      <div style="font-size:10px;color:#CBD5E0;margin-top:2px">즉각 대응 필요</div>
+    </div>
+    <div class="kpi" style="border-color:#FDE68A">
+      <div style="font-size:10px;color:#94A3B8">🟡 C·B등급</div>
+      <div style="font-size:22px;font-weight:900;color:#CA8A04;line-height:1;margin-top:4px">3건</div>
+      <div style="font-size:10px;color:#CBD5E0;margin-top:2px">모니터링 강화</div>
+    </div>
+    <div class="kpi" style="border-color:#BBF7D0">
+      <div style="font-size:10px;color:#94A3B8">🟢 A·S등급</div>
+      <div style="font-size:22px;font-weight:900;color:#16A34A;line-height:1;margin-top:4px">3건</div>
+      <div style="font-size:10px;color:#CBD5E0;margin-top:2px">마케팅 활용</div>
+    </div>
+  </div>
+
+  <!-- Demo + API -->
+  <div class="demo-banner">⚠️ <strong>데모 모드</strong> — 게시글·내부 지표(예수금 이탈, 이체 건수 등) 모두 가상의 샘플 데이터입니다.</div>
+  <div class="api-panel">
+    <div style="font-size:12px;color:#1D4ED8;font-weight:700;margin-bottom:4px">🔑 AI 실시간 분석 활성화 (선택사항)</div>
+    <div style="font-size:11px;color:#3B82F6;margin-bottom:9px">API 키를 등록하면 새 게시글을 AI가 RRS + BRI 실시간 분석합니다.</div>
+    <div style="display:flex;gap:8px">
+      <input type="password" id="apiKeyInput" class="api-input" placeholder="sk-ant-api03-..."/>
+      <button class="api-btn" onclick="saveApiKey()">저장</button>
+    </div>
+    <div id="apiStatus" style="font-size:11px;color:#64748B;margin-top:5px">💡 API 키 없이도 샘플 확인 가능합니다.</div>
+  </div>
+
+  <!-- Platform pills -->
+  <div style="display:flex;gap:5px;margin-bottom:11px;flex-wrap:wrap;align-items:center">
+    <span style="font-size:11px;color:#94A3B8;flex-shrink:0">플랫폼:</span>
+    <button class="f-btn" onclick="filterPlatform('instagram',this)">📸 인스타 3 <span style="background:#FEE2E2;color:#DC2626;font-size:9px;padding:1px 4px;border-radius:4px;margin-left:2px">⚠1</span></button>
+    <button class="f-btn" onclick="filterPlatform('naver',this)">🟢 네이버 3</button>
+    <button class="f-btn" onclick="filterPlatform('youtube',this)">▶️ 유튜브 2 <span style="background:#FEE2E2;color:#DC2626;font-size:9px;padding:1px 4px;border-radius:4px;margin-left:2px">⚠2</span></button>
+    <button class="f-btn" onclick="filterPlatform('news',this)">📰 뉴스 2 <span style="background:#FEE2E2;color:#DC2626;font-size:9px;padding:1px 4px;border-radius:4px;margin-left:2px">⚠2</span></button>
+  </div>
+
+  <!-- Grade filter -->
+  <div class="filter-bar">
+    <button class="f-btn active" onclick="filterAll(this)">전체 10</button>
+    <button class="f-btn bkw" onclick="filterBankrun(this)">🚨 뱅크런 신호 6</button>
+    <button class="f-btn" onclick="filterGrade('E',this)">E 긴급 <span style="background:#FEE2E2;color:#DC2626;font-size:10px;padding:0 4px;border-radius:4px;margin-left:2px">2</span></button>
+    <button class="f-btn" onclick="filterGrade('D',this)">D 고위험 <span style="background:#FEF3C7;color:#D97706;font-size:10px;padding:0 4px;border-radius:4px;margin-left:2px">2</span></button>
+    <button class="f-btn" onclick="filterGrade('C',this)">C 위험 <span style="background:#FEF9C3;color:#CA8A04;font-size:10px;padding:0 4px;border-radius:4px;margin-left:2px">2</span></button>
+    <button class="f-btn" onclick="filterGrade('B',this)">B 주의 <span style="background:#FEF9C3;color:#CA8A04;font-size:10px;padding:0 4px;border-radius:4px;margin-left:2px">1</span></button>
+    <button class="f-btn" onclick="filterGrade('A',this)">A 양호 <span style="background:#F0FDF4;color:#16A34A;font-size:10px;padding:0 4px;border-radius:4px;margin-left:2px">2</span></button>
+    <button class="f-btn" onclick="filterGrade('S',this)">S 우수 <span style="background:#ECFEFF;color:#0891B2;font-size:10px;padding:0 4px;border-radius:4px;margin-left:2px">1</span></button>
+  </div>
+
+  <div id="postList"></div>
+
+</div>
+</div>
+
+<!-- ADD TAB -->
+<div id="tab-add" style="display:none">
+<div class="wrap">
+  <div style="background:#fff;border-radius:16px;border:1px solid #E2E8F0;padding:22px;box-shadow:0 1px 4px rgba(0,0,0,0.05)">
+    <h3 style="font-size:16px;font-weight:800;margin-bottom:4px">📥 게시글 직접 입력</h3>
+    <p style="font-size:12px;color:#94A3B8;margin-bottom:18px">SNS 게시글이나 뉴스 기사를 붙여넣으면 AI가 RRS + BRI를 분석합니다</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      <div><label class="form-label">플랫폼</label>
+        <select id="addPlatform" class="form-input">
+          <option value="instagram">📸 인스타그램</option>
+          <option value="naver">🟢 네이버</option>
+          <option value="youtube">▶️ 유튜브</option>
+          <option value="news">📰 뉴스</option>
+        </select>
+      </div>
+      <div><label class="form-label">관련 키워드</label>
+        <input id="addKw" class="form-input" placeholder="예: 뱅크런우려"/>
+      </div>
+    </div>
+    <div style="margin-bottom:14px">
+      <label class="form-label">게시글 내용</label>
+      <textarea id="addText" class="form-textarea" rows="6" placeholder="분석할 SNS 게시글 또는 뉴스 기사를 붙여넣으세요..." oninput="checkBankrun()"></textarea>
+      <div class="bkw-alert" id="bkwAlert"></div>
+    </div>
+    <button class="submit-btn" id="submitBtn" onclick="submitPost()">피드에 추가하기 →</button>
+  </div>
+</div>
+</div>
+
+<script>
+// ── Constants ─────────────────────────────────────────
+const GCFG={E:{c:"#DC2626",bg:"#FEF2F2",border:"#FECACA",label:"긴급대응"},D:{c:"#EA580C",bg:"#FFF7ED",border:"#FED7AA",label:"고위험"},C:{c:"#D97706",bg:"#FFFBEB",border:"#FDE68A",label:"위험"},B:{c:"#CA8A04",bg:"#FEFCE8",border:"#FEF08A",label:"주의"},A:{c:"#16A34A",bg:"#F0FDF4",border:"#BBF7D0",label:"양호"},S:{c:"#0891B2",bg:"#ECFEFF",border:"#A5F3FC",label:"우수"}};
+const BALERT=[{min:80,label:"뱅크런 임박",c:"#DC2626",bg:"#FEF2F2",border:"#FECACA"},{min:60,label:"고위험 경보",c:"#EF4444",bg:"#FFF5F5",border:"#FECACA"},{min:40,label:"주의 단계",c:"#F97316",bg:"#FFF7ED",border:"#FED7AA"},{min:20,label:"관찰 단계",c:"#EAB308",bg:"#FEFCE8",border:"#FEF08A"},{min:0,label:"정상",c:"#16A34A",bg:"#F0FDF4",border:"#BBF7D0"}];
+const getBRI=s=>BALERT.find(a=>s>=a.min)||BALERT[4];
+const PLI={instagram:{label:"인스타그램",icon:"📸",c:"#E1306C",bg:"#FFF0F6"},naver:{label:"네이버",icon:"🟢",c:"#03C75A",bg:"#F0FFF4"},youtube:{label:"유튜브",icon:"▶️",c:"#EF4444",bg:"#FFF5F5"},news:{label:"뉴스",icon:"📰",c:"#0284C7",bg:"#EFF6FF"}};
+const BKW=["뱅크런","예금인출","예금자보호","현금인출","계좌해지","돈 뺀다","돈 빼야","파산","부도","불안","불신","믿을 수 없","망한다","예금 옮겨","다른 은행으로","SVB","리먼","영업정지"];
+
+// 각 게시글에 external(외부신호) + internal(내부고객행동 연계지표) 통합
+const POSTS=[
+  {
+    id:1, pl:"instagram", author:"@money_life_kr", handle:"머니라이프", time:"5분 전", lk:1240, cm:387, kw:"뱅크런우려",
+    text:"우리은행 앱 또 먹통이에요 😡 월급날 이체하려는데 오류만 뜨고 고객센터는 연결도 안 됨. 이거 파산하는 거 아닌가요? 무서워서 돈 빼야 할 것 같아요 #우리은행 #뱅크런 #불안",
+    rrs:82, grade:"E", action:"즉시 앱 장애 공식 사과문 발표 및 고객센터 긴급 증원, 뱅크런 루머 확산 차단 메시지 배포",
+    bars:{sentiment:88, virality:75, severity:80, legal:40},
+    bri:78, briAxes:{panic:82, withdrawal:75, spread:78, amplify:45},
+    internal:{deposit_outflow:"-1,240억원 급증", mobile_transfer:"+287%", atm_withdrawal:"+143%", account_close:"147건", customer_call:"앱오류 문의 집중", transfer_other:"KB·신한 방향"},
+    ibri_link:"앱 장애 발생 직후 모바일 이체 시도 +287% 급증 — 외부 불안 심리가 내부 행동으로 즉각 전환",
+    summary:"앱 장애가 SNS 공포 확산의 트리거로 작용하며 실제 모바일 이체·ATM 인출 급증으로 이어졌습니다. 외부 신호와 내부 행동이 동시에 악화되는 복합 위험 상황입니다.",
+    keywords:["앱오류뱅크런","모바일이체급증","내부외부동시악화"]
+  },
+  {
+    id:2, pl:"naver", author:"금융꿀팁연구소", handle:"네이버 블로그", time:"22분 전", lk:312, cm:47, kw:"은행혜택비교",
+    text:"주거래은행 혜택 총정리! WON뱅킹 환전 수수료 90% 우대, 청년 전세대출 금리 최저 연 2.9%, SOL트래블 해외ATM 무료. 시중은행 비교해봤는데 경쟁력 확실히 있네요 👍 #금융혜택 #주거래은행",
+    rrs:18, grade:"S", action:"긍정 후기를 공식 채널에서 적극 활용, 신규 고객 유치 캠페인 연계",
+    bars:{sentiment:8, virality:35, severity:5, legal:5},
+    bri:9, briAxes:{panic:5, withdrawal:8, spread:15, amplify:10},
+    internal:{deposit_outflow:"신규 유입 +320억원", mobile_transfer:"정상 범위", atm_withdrawal:"정상", account_close:"신규 가입 +218건", customer_call:"혜택 문의 증가(긍정)", transfer_other:"타행 → 당행 유입"},
+    ibri_link:"긍정 바이럴 게시글 확산 후 당일 신규 계좌 개설 +218건 유입 — 외부 긍정 신호가 내부 고객 유입으로 연결",
+    summary:"고객 자발적 혜택 비교 콘텐츠가 신규 계좌 유입으로 직결되는 긍정 선순환 패턴입니다. 마케팅 앰버서더 캠페인으로 확대 활용을 권장합니다.",
+    keywords:["혜택바이럴","신규유입","긍정선순환"]
+  },
+  {
+    id:3, pl:"youtube", author:"소비자권익TV", handle:"유튜브 댓글", time:"48분 전", lk:2180, cm:641, kw:"예금이탈경고",
+    text:"ELS 사태에 개인정보 유출까지 겹치면 뱅크런 가능성이 없다고 볼 수 없죠. 리먼 사태 때처럼 한순간에 무너질 수 있어요. 저는 이미 다른 은행으로 예금 옮겼습니다. 여러분도 서두르세요.",
+    rrs:91, grade:"E", action:"즉각 위기대응팀 소집, 공식 해명 자료 배포, 타행 이체 급증 모니터링 강화",
+    bars:{sentiment:92, virality:88, severity:90, legal:85},
+    bri:88, briAxes:{panic:90, withdrawal:92, spread:85, amplify:80},
+    internal:{deposit_outflow:"-3,870억원(당일)", mobile_transfer:"+412% 이상급증", atm_withdrawal:"+231%", account_close:"383건(전일比 +520%)", customer_call:"'예금 안전하냐' 집중", transfer_other:"KB·신한·하나 동시 급증"},
+    ibri_link:"댓글 게시 2시간 후 타행 이체 +412% 급등 — 유튜브 바이럴이 실제 예금 대량 이탈 트리거로 확인",
+    summary:"실제 예금 이탈 인증과 구체적 이탈 독려 메시지가 내부 모바일 이체·타행 이체 급증으로 직결됐습니다. 외부-내부 연동 가장 강한 고위험 게시글입니다.",
+    keywords:["예금이탈인증","타행이체급증","리먼비유"]
+  },
+  {
+    id:4, pl:"news", author:"조선일보", handle:"뉴스 기사", time:"1시간 전", lk:0, cm:528, kw:"실적호조",
+    text:"3분기 순이익 7,840억원… 전년比 11.3% 증가. NIM 개선·비이자이익 확대 효과로 연간 목표치 초과 달성 전망. 주가도 강세 흐름. 건전성 지표 개선으로 금융당국도 긍정 평가.",
+    rrs:22, grade:"A", action:"IR팀 활용한 투자자 신뢰 강화, 긍정 실적 뉴스의 고객 안심 메시지로 전환 활용",
+    bars:{sentiment:10, virality:55, severity:8, legal:5},
+    bri:11, briAxes:{panic:8, withdrawal:5, spread:18, amplify:20},
+    internal:{deposit_outflow:"순유입 +1,200억원", mobile_transfer:"정상 범위", atm_withdrawal:"정상", account_close:"신규 +156건", customer_call:"'이자율 문의' 정상수준", transfer_other:"이탈 없음"},
+    ibri_link:"실적 호조 보도 직후 예수금 순유입 +1,200억원 — 언론 긍정 보도가 내부 고객 신뢰 지표 안정화에 기여",
+    summary:"실적 호조 언론 보도가 예수금 순유입과 신규 계좌 개설 증가로 이어지며 내부 안정 지표를 강화했습니다. 현재 위기 상황의 균형추 역할로 적극 활용이 필요합니다.",
+    keywords:["실적호조","예수금순유입","내부안정"]
+  },
+  {
+    id:5, pl:"instagram", author:"@panic_finance", handle:"공황재테크", time:"2시간 전", lk:3420, cm:892, kw:"뱅크런대비",
+    text:"예금자보호 한도 5천만원 넘으면 위험합니다! 지금 당장 계좌 분산하세요. 저는 이미 현금인출 완료했어요. SVB 사태 기억하시죠? 다음은 여기일 수도 있어요 #예금자보호 #뱅크런대비 #현금인출",
+    rrs:95, grade:"E", action:"즉시 경영진 보고·예금자보호 안내 공식 성명 발표, 법적 허위사실 유포 대응 검토",
+    bars:{sentiment:95, virality:95, severity:92, legal:70},
+    bri:92, briAxes:{panic:95, withdrawal:95, spread:92, amplify:85},
+    internal:{deposit_outflow:"-4,230억원(3시간)", mobile_transfer:"+512% 역대최고", atm_withdrawal:"+387% 한도집중", account_close:"621건(역대최고)", customer_call:"4,100건 폭주·불통", transfer_other:"전 시중은행 방향 분산이탈"},
+    ibri_link:"게시물 공유 3시간 만에 ATM 한도 집중 인출 +387%·고객센터 폭주 — I-BRI 최고 위험 트리거 게시글",
+    summary:"직접적 현금인출 완료 인증과 SVB 비유가 내부 ATM·모바일 이체 역대 최고치를 기록하게 한 핵심 트리거입니다. 외부-내부 연동 강도가 전체 게시글 중 최고 수준입니다.",
+    keywords:["현금인출완료","ATM한도집중","SVB비유최고위험"]
+  },
+  {
+    id:6, pl:"naver", author:"법률금융카페", handle:"네이버 카페", time:"3시간 전", lk:2140, cm:647, kw:"ELS집단소송",
+    text:"홍콩 H지수 ELS 손실 피해자 집단소송 2차 모집 안내. 현재까지 원금의 평균 55% 손실 확인. 은행 신뢰도가 바닥을 치는데 예금 옮겨야 하나 진지하게 고민됩니다. 법무법인 무료 상담 링크 공유.",
+    rrs:78, grade:"D", action:"법무팀 ELS 보상안 즉시 검토·피해자 직접 소통 창구 개설, 집단소송 확대 차단",
+    bars:{sentiment:80, virality:72, severity:85, legal:90},
+    bri:65, briAxes:{panic:70, withdrawal:68, spread:65, amplify:58},
+    internal:{deposit_outflow:"-1,840억원(ELS가입자)", mobile_transfer:"+178% ELS관련계좌", atm_withdrawal:"+95%", account_close:"247건(ELS가입자집중)", customer_call:"ELS 손실 문의 집중", transfer_other:"ELS가입자 타행이체 집중"},
+    ibri_link:"소송 모집글 확산 후 ELS 가입 계좌 보유자 중심 타행 이체 +178% — 특정 피해 고객군의 이탈 가속화",
+    summary:"집단소송 모집이 ELS 가입 고객군의 집중적인 예금 이탈과 타행 이체를 유발했습니다. 법적·평판 복합 리스크로 특정 고객군 이탈 차단 전략이 필요합니다.",
+    keywords:["ELS소송","가입자이탈집중","법적평판복합"]
+  },
+  {
+    id:7, pl:"youtube", author:"재테크유튜버민준", handle:"유튜브 댓글", time:"4시간 전", lk:203, cm:41, kw:"적금금리비교",
+    text:"WON적금 금리 진짜 좋던데요? 연 4.5%에 조건도 까다롭지 않고. 시중은행 중 상위권이에요. 요즘 불안한 소식 많지만 금리만큼은 확실히 챙겨주네요. 강력 추천합니다!",
+    rrs:15, grade:"S", action:"WON적금 긍정 바이럴 활용, 불안 심리 상쇄용 금리 경쟁력 마케팅 강화",
+    bars:{sentiment:5, virality:30, severity:5, legal:5},
+    bri:8, briAxes:{panic:5, withdrawal:5, spread:12, amplify:10},
+    internal:{deposit_outflow:"적금 신규 +480억원", mobile_transfer:"정상", atm_withdrawal:"정상", account_close:"신규 적금 가입 +312건", customer_call:"금리 문의 긍정적", transfer_other:"타행→당행 적금이전 증가"},
+    ibri_link:"금리 비교 콘텐츠 확산 후 타행에서 당행으로 적금 이전 증가 — 위기 속 금리 경쟁력이 고객 유입 요인",
+    summary:"불안한 외부 환경 속에서도 금리 경쟁력에 대한 긍정 콘텐츠가 신규 적금 가입과 타행 자금 유입을 이끌었습니다. 위기 상황 완충을 위한 마케팅 강화가 효과적입니다.",
+    keywords:["WON적금금리","타행자금유입","위기속긍정"]
+  },
+  {
+    id:8, pl:"news", author:"한겨레", handle:"뉴스 기사", time:"5시간 전", lk:0, cm:2830, kw:"개인정보유출",
+    text:"개인정보 유출 의혹 내부 고발 — 직원 수천 명 고객 조회 기록 무더기 감사 착수. SNS에서 '믿을 수 없는 은행'이라며 계좌해지 인증 게시물이 급증 중. 금융당국 현장 점검 예정.",
+    rrs:88, grade:"E", action:"즉시 금융위 보고·개인정보 긴급 점검·공식 성명 발표, 계좌해지 급증 대응팀 가동",
+    bars:{sentiment:90, virality:85, severity:88, legal:92},
+    bri:82, briAxes:{panic:85, withdrawal:80, spread:82, amplify:88},
+    internal:{deposit_outflow:"-2,910억원(당일)", mobile_transfer:"+334%", atm_withdrawal:"+198%", account_close:"534건 인증샷 확산", customer_call:"'내 정보 유출됐냐' 폭증", transfer_other:"전 연령대 분산이탈"},
+    ibri_link:"개인정보 유출 보도 후 '계좌해지 인증' SNS 트렌드 형성 → 당일 해지 534건 역대 최고 — 언론 보도가 내부 행동 촉발",
+    summary:"언론의 개인정보 유출 보도가 SNS 계좌해지 인증 트렌드를 형성하고 이것이 실제 대규모 해지로 이어지는 외부-내부 최악의 연동 패턴입니다. 즉각 경영진 개입이 필요합니다.",
+    keywords:["개인정보유출","계좌해지인증트렌드","외부내부최악연동"]
+  },
+  {
+    id:9, pl:"instagram", author:"@travel_with_won", handle:"여행스타그램", time:"6시간 전", lk:934, cm:116, kw:"SOL트래블카드",
+    text:"SOL트래블카드 유럽 여행 내내 진짜 편했어요✈️ 환전 수수료 0원·ATM 무료·실시간 환율. 여행 중 불안한 뉴스 봤는데 이 카드는 걱정 없이 쓸 수 있었어요 #SOL트래블 #해외여행 #여행필수템",
+    rrs:12, grade:"A", action:"SOL트래블 긍정 후기 공식 리그램·뱅크런 우려 상쇄 고객 안심 메시지로 활용",
+    bars:{sentiment:5, virality:42, severity:5, legal:5},
+    bri:7, briAxes:{panic:5, withdrawal:5, spread:15, amplify:8},
+    internal:{deposit_outflow:"영향 없음", mobile_transfer:"정상", atm_withdrawal:"해외ATM 정상 사용", account_close:"카드 신규 발급 +189건", customer_call:"트래블카드 문의 증가(긍정)", transfer_other:"없음"},
+    ibri_link:"여행 긍정 후기 확산 → 당일 트래블카드 신규 발급 +189건 — 위기 중 긍정 콘텐츠의 고객 유지 효과 확인",
+    summary:"뱅크런 우려 속에서도 여행 관련 긍정 후기가 카드 신규 발급 증가로 이어지며 고객 신뢰를 유지했습니다. 위기 국면에서 생활밀착형 긍정 콘텐츠의 완충 효과가 검증됩니다.",
+    keywords:["SOL트래블","위기속고객유지","긍정완충효과"]
+  },
+  {
+    id:10, pl:"news", author:"머니투데이", handle:"뉴스 기사", time:"7시간 전", lk:0, cm:4120, kw:"뱅크런루머확산",
+    text:"금감원, ELS 불완전판매 제재심 다음 달 개최. 온라인 커뮤니티에서 '망한다', '뱅크런 올 것 같다'는 게시물이 하루 새 1만 건 이상 확산. 예수금 이탈 및 모바일 이체 급증 지표도 당국이 예의주시 중.",
+    rrs:86, grade:"D", action:"금감원 제재 선제 대응·뱅크런 루머 공식 해명·예수금 이탈 실시간 임계치 모니터링 가동",
+    bars:{sentiment:85, virality:92, severity:85, legal:88},
+    bri:79, briAxes:{panic:78, withdrawal:72, spread:88, amplify:82},
+    internal:{deposit_outflow:"-3,400억원(누적)", mobile_transfer:"+389% 지속상승", atm_withdrawal:"+276%", account_close:"471건(3일 누적)", customer_call:"당국 예의주시 보도 후 2배 폭증", transfer_other:"루머 확산 지역 집중이탈"},
+    ibri_link:"뉴스 보도 후 6시간 만에 모바일 이체 +389% 지속 상승 — 금융당국 언급이 오히려 고객 불안 증폭시켜 내부 이탈 가속",
+    summary:"금감원의 예의주시 보도가 역설적으로 고객 불안을 증폭시켜 모바일 이체와 예수금 이탈을 가속화했습니다. SNS 루머와 언론 보도의 악순환이 내부 지표 동시 악화로 이어지는 위기 임박 상황입니다.",
+    keywords:["뱅크런루머1만건","당국보도역효과","내부외부악순환"]
+  },
+];
+
+let allPosts=[...POSTS], currentFilter="all", apiKey="";
+
+// ── Timeline ─────────────────────────────────────────
+function renderTimeline(){
+  const hours=["09","10","11","12","13","14"];
+  const vals=[120,180,240,890,1540,2340];
+  const max=Math.max(...vals);
+  document.getElementById("tlBars").innerHTML=hours.map((h,i)=>{
+    const color=vals[i]>1000?"#EF4444":vals[i]>500?"#F97316":"#FCD34D";
+    return `<div class="tl-bar" style="height:${Math.max(4,Math.round((vals[i]/max)*40))}px;background:${color}" data-tip="${h}시: ${vals[i].toLocaleString()}억원"></div>`;
+  }).join("");
+  document.getElementById("tlLabels").innerHTML=hours.map(h=>`<div class="tl-lbl">${h}시</div>`).join("");
+}
+
+// ── Highlight keywords ───────────────────────────────
+function hlText(t){BKW.forEach(k=>{t=t.split(k).join(`<mark>${k}</mark>`);});return t;}
+
+// ── Render post card ─────────────────────────────────
+function renderCard(p){
+  const gc=GCFG[p.grade]||GCFG.B, ba=getBRI(p.bri), pl=PLI[p.pl];
+  const hasBkw=BKW.some(k=>p.text.includes(k));
+  return `
+  <div class="post-card">
+    <div class="rrs-bar" style="width:${p.rrs}%;background:${gc.c}"></div>
+    <div class="post-inner">
+      <div style="display:flex;align-items:flex-start;gap:9px;margin-bottom:9px">
+        <div style="width:34px;height:34px;border-radius:8px;background:${pl.bg};border:1px solid ${pl.c}22;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">${pl.icon}</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-bottom:2px">
+            <span style="font-weight:700;font-size:13px;color:#1A202C">${p.author}</span>
+            <span class="pill" style="background:${pl.bg};color:${pl.c}">${pl.icon} ${pl.label}</span>
+            <span class="pill" style="background:#EFF6FF;color:#3B82F6">#${p.kw}</span>
+            ${hasBkw?`<span class="pill" style="background:#FEE2E2;color:#DC2626;border:1px solid #FECACA">🚨 뱅크런 신호</span>`:''}
+          </div>
+          <div style="font-size:11px;color:#94A3B8">${p.handle} · ${p.time}${p.lk>0?` ❤️ ${p.lk.toLocaleString()}`:''}${p.cm>0?` 💬 ${p.cm.toLocaleString()}`:''}</div>
+        </div>
+        <div style="flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+          <div style="display:flex;align-items:center;gap:6px">
+            <div style="text-align:right"><div style="font-size:9px;color:#94A3B8">RRS</div><div style="font-size:19px;font-weight:900;color:${gc.c};line-height:1">${p.rrs}</div></div>
+            <div style="width:38px;height:38px;border-radius:10px;background:${gc.bg};border:2px solid ${gc.border};display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;color:${gc.c}">${p.grade}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:4px;background:${ba.bg};border:1px solid ${ba.border};border-radius:7px;padding:3px 8px">
+            <div style="font-size:9px;color:#94A3B8">BRI</div>
+            <div style="font-size:13px;font-weight:900;color:${ba.c}">${p.bri}</div>
+            <div style="font-size:10px;color:${ba.c};font-weight:600">${ba.label}</div>
+          </div>
+        </div>
+      </div>
+      <div style="font-size:13px;color:#374151;line-height:1.7;padding-left:43px;margin-bottom:11px">${hasBkw?hlText(p.text):p.text}</div>
+      <div style="margin-left:43px">
+        <div style="display:flex;align-items:center;gap:7px;background:${gc.bg};border:1px solid ${gc.border};border-radius:9px;padding:8px 12px;margin-bottom:9px">
+          <span style="font-size:12px;font-weight:800;color:${gc.c};flex-shrink:0">${p.grade}등급 · ${gc.label}</span>
+          <div style="width:1px;height:14px;background:${gc.border};flex-shrink:0"></div>
+          <span style="font-size:11px;color:#64748B;flex:1">${p.action}</span>
+        </div>
+        <div class="bars-box">
+          <div style="font-size:11px;color:#374151;font-weight:700;margin-bottom:8px">📊 RRS 평가 지표</div>
+          ${[{l:"부정 감성도",c:"#EF4444",v:p.bars.sentiment},{l:"확산 위험도",c:"#F59E0B",v:p.bars.virality},{l:"이슈 중대성",c:"#F97316",v:p.bars.severity},{l:"법적·규제 위험",c:"#A855F7",v:p.bars.legal}].map(b=>`
+          <div class="b-row">
+            <div class="b-lbl"><span style="font-size:11px;color:#64748B">${b.l}</span><span style="font-size:11px;color:${b.c};font-weight:700">${b.v}점</span></div>
+            <div class="b-track"><div class="b-fill" style="width:${b.v}%;background:${b.c}"></div></div>
+          </div>`).join('')}
+          <div style="display:flex;justify-content:flex-end;margin-top:6px;padding-top:6px;border-top:1px solid #E2E8F0">
+            <span style="font-size:11px;color:#94A3B8;margin-right:5px">RRS 종합</span>
+            <span style="font-size:14px;font-weight:900;color:${gc.c}">${p.rrs}점</span>
+          </div>
+        </div>
+        <!-- BRI 외부 신호 -->
+        <div class="bri-box" style="background:${ba.bg};border:1px solid ${ba.border}">
+          <div style="font-size:11px;color:${ba.c};font-weight:700;margin-bottom:7px;display:flex;align-items:center;gap:5px">
+            📡 외부 BRI <span style="font-size:15px;font-weight:900">${p.bri}점</span>
+            <span style="background:${ba.bg};border:1px solid ${ba.border};padding:1px 8px;border-radius:20px;font-size:10px">${ba.label}</span>
+          </div>
+          <div style="display:flex;gap:9px">
+            ${[{l:"불신·공포",c:"#EF4444",v:p.briAxes.panic},{l:"인출의도",c:"#F97316",v:p.briAxes.withdrawal},{l:"확산속도",c:"#F59E0B",v:p.briAxes.spread},{l:"미디어증폭",c:"#A855F7",v:p.briAxes.amplify}].map(b=>`
+            <div style="flex:1">
+              <div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="font-size:10px;color:#94A3B8">${b.l}</span><span style="font-size:10px;color:${b.c};font-weight:700">${b.v}</span></div>
+              <div class="b-track"><div class="b-fill" style="width:${b.v}%;background:${b.c}"></div></div>
+            </div>`).join('')}
+          </div>
+        </div>
+
+        <!-- 내부 고객행동 연계 지표 -->
+        ${p.internal ? `
+        <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:9px;padding:10px 12px;margin-bottom:7px">
+          <div style="font-size:11px;color:#1D4ED8;font-weight:700;margin-bottom:8px">🏦 내부 고객행동 연계 지표</div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px">
+            ${[
+              {l:"예수금 이탈",v:p.internal.deposit_outflow,c:p.internal.deposit_outflow.startsWith('-')||p.internal.deposit_outflow.includes('급증')?"#DC2626":"#16A34A"},
+              {l:"모바일 이체",v:p.internal.mobile_transfer,c:p.internal.mobile_transfer.includes('+')||p.internal.mobile_transfer.includes('급증')?"#EA580C":"#16A34A"},
+              {l:"ATM 인출",v:p.internal.atm_withdrawal,c:p.internal.atm_withdrawal.includes('+')||p.internal.atm_withdrawal.includes('급증')?"#D97706":"#16A34A"},
+              {l:"계좌 해지",v:p.internal.account_close,c:p.internal.account_close.includes('건')&&!p.internal.account_close.includes('신규')?"#D97706":p.internal.account_close.includes('신규')?"#16A34A":"#64748B"},
+              {l:"고객센터",v:p.internal.customer_call,c:p.internal.customer_call.includes('폭')?"#DC2626":p.internal.customer_call.includes('긍')?"#16A34A":"#64748B"},
+              {l:"타행 이체",v:p.internal.transfer_other,c:p.internal.transfer_other.includes('이탈')||p.internal.transfer_other.includes('방향')?"#D97706":p.internal.transfer_other.includes('유입')?"#16A34A":"#64748B"},
+            ].map(m=>`
+            <div style="background:#fff;border:1px solid #BFDBFE;border-radius:7px;padding:7px 8px">
+              <div style="font-size:9px;color:#94A3B8;margin-bottom:2px">${m.l}</div>
+              <div style="font-size:11px;font-weight:700;color:${m.c};line-height:1.3">${m.v}</div>
+            </div>`).join('')}
+          </div>
+          <!-- 외부-내부 연동 분석 -->
+          <div style="background:#DBEAFE;border-radius:7px;padding:7px 9px;font-size:11px;color:#1D4ED8;line-height:1.55">
+            <span style="font-weight:800">🔗 외부→내부 연동 </span>${p.ibri_link}
+          </div>
+        </div>` : ''}
+
+        <div class="summary-txt"><span style="color:#0046B5;font-weight:700">💡 통합 인사이트 </span>${p.summary}</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">${p.keywords.map(k=>`<span class="kw-tag">#${k}</span>`).join('')}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderPosts(){
+  const s=document.getElementById('searchInput').value.toLowerCase();
+  const vis=allPosts.filter(p=>{
+    if(!(!s||p.text.toLowerCase().includes(s)||p.author.toLowerCase().includes(s)||p.kw.toLowerCase().includes(s)))return false;
+    if(currentFilter==='all')return true;
+    if(currentFilter==='bankrun')return BKW.some(k=>p.text.includes(k));
+    if(['E','D','C','B','A','S'].includes(currentFilter))return p.grade===currentFilter;
+    return p.pl===currentFilter;
+  });
+  document.getElementById('postList').innerHTML=vis.length?vis.map(renderCard).join(''):`<div style="text-align:center;color:#94A3B8;padding:40px 0;font-size:14px">해당하는 게시글이 없습니다.</div>`;
+}
+
+function setActive(el,bkw=false){document.querySelectorAll('.f-btn').forEach(b=>{b.classList.remove('active','bkw');});el.classList.add('active');if(bkw)el.classList.add('bkw');}
+function filterAll(el){currentFilter='all';setActive(el);renderPosts();}
+function filterBankrun(el){currentFilter='bankrun';setActive(el,true);renderPosts();}
+function filterGrade(g,el){currentFilter=g;setActive(el);renderPosts();}
+function filterPlatform(pl,el){currentFilter=pl;document.querySelectorAll('.f-btn').forEach(b=>b.classList.remove('active'));if(el)el.classList.add('active');renderPosts();}
+
+function switchTab(id,el){
+  document.querySelectorAll('.nav-tab').forEach(b=>b.classList.remove('active'));el.classList.add('active');
+  document.getElementById('tab-feed').style.display=id==='feed'?'block':'none';
+  document.getElementById('tab-add').style.display=id==='add'?'block':'none';
+}
+
+function saveApiKey(){
+  const v=document.getElementById('apiKeyInput').value.trim();
+  if(!v||!v.startsWith('sk-')){alert('올바른 API 키를 입력해주세요.\n(sk-ant-api03-... 형태)');return;}
+  apiKey=v;
+  document.getElementById('apiStatus').innerHTML='<span style="color:#16A34A">✅ API 키 저장 완료.</span>';
+}
+
+function checkBankrun(){
+  const t=document.getElementById('addText').value, f=BKW.filter(k=>t.includes(k));
+  const b=document.getElementById('bkwAlert');
+  b.style.display=f.length?'block':'none';
+  if(f.length)b.textContent='🚨 뱅크런 신호 키워드 감지: '+f.join(', ');
+}
+
+async function submitPost(){
+  const txt=document.getElementById('addText').value.trim(), pl=document.getElementById('addPlatform').value, kw=document.getElementById('addKw').value.trim()||'우리은행';
+  if(!txt)return;
+  const pli=PLI[pl], btn=document.getElementById('submitBtn');
+  const np={id:Date.now(),pl,author:'@custom_user',handle:pli.label,time:'방금 전',lk:0,cm:0,kw,text:txt};
+  if(apiKey){
+    btn.textContent='AI 분석 중...';btn.disabled=true;
+    try{
+      const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1200,system:`금융기관 평판 리스크 분석가. 순수 JSON만 반환:{"sentiment":0-100,"virality":0-100,"severity":0-100,"legal":0-100,"bri":{"panic":0-100,"withdrawal":0-100,"spread":0-100,"amplify":0-100},"summary":"2문장","action":"대응방안 1문장","keywords":["k1","k2","k3"],"grade":"E|D|C|B|A|S","rrs":0-100}`,messages:[{role:'user',content:`플랫폼:${pli.label}\n게시글:${txt}`}]})});
+      const data=await res.json();
+      const r=JSON.parse(data.content.map(c=>c.text||'').join('').replace(/```json|```/g,'').trim());
+      Object.assign(np,{rrs:r.rrs||50,grade:r.grade||'B',action:r.action||'추가 분석 필요',bars:{sentiment:r.sentiment,virality:r.virality,severity:r.severity,legal:r.legal},bri:r.bri?Math.round(r.bri.panic*.3+r.bri.withdrawal*.3+r.bri.spread*.25+r.bri.amplify*.15):30,briAxes:r.bri||{panic:30,withdrawal:25,spread:35,amplify:20},summary:r.summary||'분석 완료',keywords:r.keywords||[]});
+    }catch{const bkw=BKW.some(k=>txt.includes(k));Object.assign(np,{rrs:bkw?75:35,grade:bkw?'D':'B',action:'AI 오류. 수동 검토 권장',bars:{sentiment:bkw?70:30,virality:50,severity:bkw?65:25,legal:bkw?50:15},bri:bkw?65:15,briAxes:{panic:bkw?65:10,withdrawal:bkw?60:8,spread:bkw?70:15,amplify:bkw?55:12},summary:'분석 중 오류가 발생했습니다.',keywords:['분석오류']});}
+    btn.textContent='피드에 추가하기 →';btn.disabled=false;
+  }else{
+    const bkw=BKW.some(k=>txt.includes(k));
+    Object.assign(np,{rrs:bkw?70:30,grade:bkw?'D':'B',action:'API 키를 등록하면 AI 정밀 분석이 가능합니다',bars:{sentiment:bkw?65:25,virality:45,severity:bkw?60:20,legal:bkw?45:15},bri:bkw?60:12,briAxes:{panic:bkw?62:10,withdrawal:bkw?58:8,spread:bkw?65:14,amplify:bkw?52:10},summary:'API 키를 등록하면 AI가 정밀하게 분석합니다.',keywords:['키워드분석']});
+  }
+  allPosts.unshift(np);
+  document.getElementById('addText').value='';document.getElementById('addKw').value='';document.getElementById('bkwAlert').style.display='none';
+  switchTab('feed',document.querySelector('.nav-tab'));renderPosts();
+}
+
+// ── Init ─────────────────────────────────────────────
+renderTimeline();
+renderPosts();
+</script>
+</body>
+</html>
